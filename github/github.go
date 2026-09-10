@@ -5,10 +5,12 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+
+	"github.com/616xold/namecheck"
 )
 
 type GitHub struct {
-	Client *http.Client
+	Client namecheck.Doer
 }
 
 var re = regexp.MustCompile("^[A-Za-z0-9-]{3,39}$")

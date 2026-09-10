@@ -1,9 +1,9 @@
 package bluesky
 
-import "net/http"
+import "github.com/616xold/namecheck"
 
 type Bluesky struct {
-	Client *http.Client
+	Client namecheck.Doer
 }
 
 func (b *Bluesky) IsValid(username string) bool { return false }
