@@ -1,5 +1,15 @@
 package bluesky
 
-func IsValid(username string) bool { return false }
+import "net/http"
 
-func IsAvailable(username string) (bool, error) { return false, nil }
+type Bluesky struct {
+	Client *http.Client
+}
+
+func (b *Bluesky) IsValid(username string) bool { return false }
+
+func (b *Bluesky) IsAvailable(username string) (bool, error) { return false, nil }
+
+func (gh *Bluesky) String() string {
+	return "Bluesky"
+}

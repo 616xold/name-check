@@ -9,22 +9,23 @@ import (
 
 func TestIsValid(t *testing.T) {
 	type TestCase struct {
+		//desc     string
 		username string
 		want     bool
 	}
 	testCases := map[string]TestCase{
-		"contains two consecutive hyphens": {username: "jub0bs--on-GitHub", want: false},
-		"starts with a hyphen":             {username: "-616xold", want: false},
-		"ends with a hyphen":               {username: "jub0bs-", want: false},
-		"too short":                        {username: "ab", want: false},
-		"too long":                         {username: strings.Repeat("a", 40), want: false},
-		"contains illegal chars":           {username: "jub&bs", want: false},
-		"all good":                         {username: "jub0bs", want: true},
+		"contains two consecutive hyphens": {"jub0bs--on-GitHub", false},
+		"starts with a hyphen":             {"-jub0bs", false},
+		"ends with a hyphen":               {"jub0bs-", false},
+		"too short":                        {"ab", false},
+		"too long":                         {strings.Repeat("a", 40), false},
+		"contains illegal chars":           {"jub&bs", false},
+		"all good":                         {"jub0bs", true},
 	}
-
+	var gh github.GitHub
 	for desc, tc := range testCases {
 		f := func(t *testing.T) {
-			got := github.IsValid(tc.username)
+			got := gh.IsValid(tc.username)
 			if got != tc.want {
 				const tmpl = "github.IsValid(%q): got %t; want %t"
 				t.Errorf(tmpl, tc.username, got, tc.want)
