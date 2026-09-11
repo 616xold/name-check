@@ -4,10 +4,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"maps"
 	"net/http"
 	"sync"
 
 	"github.com/616xold/namecheck/github"
+	"golang.org/x/net/context"
 
 	"github.com/jub0bs/cors"
 )
@@ -26,9 +28,16 @@ type Result struct {
 	Err       error
 }
 
+var checks = make(map[string]int)
+var mu sync.Mutex
+
 func handleCheck(w http.ResponseWriter, r *http.Request) {
 
 	username := r.URL.Query().Get("username")
+
+	mu.Lock()
+	checks[username]++
+	mu.Unlock()
 
 	if username == "" {
 		w.WriteHeader(http.StatusBadRequest)
@@ -49,7 +58,7 @@ func handleCheck(w http.ResponseWriter, r *http.Request) {
 
 	for _, checker := range checkers {
 		wg.Add(1)
-		go check(checker, username, &wg, resultCh)
+		go check(context.TODO(), checker, username, &wg, resultCh)
 	}
 	go func() {
 		wg.Wait()
@@ -58,6 +67,14 @@ func handleCheck(w http.ResponseWriter, r *http.Request) {
 
 	var results []Result
 	for result := range resultCh {
+		if result.Err != nil {
+			http.Error(
+				w,
+				"availability check failed",
+				http.StatusInternalServerError,
+			)
+			return
+		}
 		results = append(results, result)
 	}
 
@@ -82,9 +99,26 @@ func handleCheck(w http.ResponseWriter, r *http.Request) {
 
 }
 
+func handleStats(w http.ResponseWriter, r *http.Request) {
+	mu.Lock()
+	snapshot := maps.Clone(checks)
+	mu.Unlock()
+	w.Header().Set("Content-Type", "application/json")
+
+	if err := json.NewEncoder(w).Encode(snapshot); err != nil {
+		http.Error(
+			w,
+			"failed to encode stats",
+			http.StatusInternalServerError,
+		)
+		return
+	}
+}
+
 func main() {
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /check", handleCheck)
+	mux.HandleFunc("GET /stats", handleStats)
 
 	// instantiate a CORS middleware whose configuration suits your needs
 	corsMw, err := cors.NewMiddleware(cors.Config{
@@ -103,8 +137,14 @@ func main() {
 	}
 }
 
-func check(checker Checker, username string, wg *sync.WaitGroup, resultCh chan Result) {
+func check(ctx context.Context, checker Checker, username string, wg *sync.WaitGroup, resultCh chan Result) {
 	defer wg.Done()
+
+	select {
+	case <-ctx.Done():
+		return
+	default:
+	}
 
 	result := Result{
 		Platform: checker.String(),
@@ -113,16 +153,37 @@ func check(checker Checker, username string, wg *sync.WaitGroup, resultCh chan R
 	result.Valid = checker.IsValid(username)
 
 	if !result.Valid {
-		resultCh <- result
+		select {
+		case resultCh <- result:
+		case <-ctx.Done():
+			return
+		}
 		return
+	}
+
+	select {
+	case <-ctx.Done():
+		return
+	default:
 	}
 
 	avail, err := checker.IsAvailable(username)
 	if err != nil {
 		result.Err = err
-		resultCh <- result
+
+		select {
+		case resultCh <- result:
+		case <-ctx.Done():
+			return
+		}
 		return
 	}
+
 	result.Available = avail
-	resultCh <- result
+
+	select {
+	case resultCh <- result:
+	case <-ctx.Done():
+		return
+	}
 }
